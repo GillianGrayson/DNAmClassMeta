@@ -10,11 +10,7 @@ hydra-colorlog>=1.1.0
 hydra-optuna-sweeper>=1.1.0
 
 # --------- loggers --------- #
-# wandb
-# neptune-client
-# mlflow
-# comet-ml
-# tensorboard
+wandb
 
 # --------- linters --------- #
 pre-commit      # hooks for applying linters on commit
@@ -24,8 +20,14 @@ flake8          # code analysis
 nbstripout      # remove output from jupyter notebooks
 
 # --------- others --------- #
-python-dotenv   # loading env variables from .env file
-rich            # beautiful text formatting in terminal
-pytest          # tests
-sh              # for running bash commands in some tests
-pudb            # debugger
+python-dotenv           # loading env variables from .env file
+rich                    # beautiful text formatting in terminal
+pytest                  # tests
+sh                      # for running bash commands in some tests
+pudb                    # debugger
+pandas>=1.4.2           # pandas
+impyute>=0.0.8          # imputation methods
+plotly>=5.7.0           # plotting figures
+torchmetrics>=0.8.1     # ml metrics
+
+# --------- ensemble tree models --------- #

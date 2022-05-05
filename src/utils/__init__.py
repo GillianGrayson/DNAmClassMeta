@@ -145,6 +145,15 @@ def log_hyperparameters(
     trainer.logger.log_hyperparams(hparams)
 
 
+@rank_zero_only
+def log_hyperparameters_sa(
+        config: DictConfig,
+        logger,
+) -> None:
+    for l in logger:
+        l.log_hyperparams(config)
+
+
 def finish(
     config: DictConfig,
     model: pl.LightningModule,
