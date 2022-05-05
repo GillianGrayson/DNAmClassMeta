@@ -16,7 +16,7 @@ def calc_metric(self, y_true, y_score):
     if self.metric_type == "accuracy":
         value = torchmetrics.functional.accuracy(y_score_torch, y_true_torch, average=self.average, num_classes=self.num_classes)
     elif self.metric_type == "f1":
-        value = torchmetrics.functional.f1(y_score_torch, y_true_torch, average=self.average, num_classes=self.num_classes)
+        value = torchmetrics.functional.f1_score(y_score_torch, y_true_torch, average=self.average, num_classes=self.num_classes)
     elif self.metric_type == "precision":
         value = torchmetrics.functional.precision(y_score_torch, y_true_torch, average=self.average, num_classes=self.num_classes)
     elif self.metric_type == "recall":

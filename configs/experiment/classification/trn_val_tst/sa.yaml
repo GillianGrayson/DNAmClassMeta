@@ -1,15 +1,13 @@
 # @package _global_
 
 disease: Parkinson
-data_type: non_harmonized
+data_type: harmonized
 model_sa: lightgbm
 outcome: "Status"
 
-tst_dataset: "GSE72774"
+name: ${disease}_${data_type}_${model_sa}
 
-project_name: ${disease}_${data_type}_trn_tst_${model_sa}
-
-seed: 69
+seed: 42
 
 cv_is_split: False
 cv_n_splits: 5
@@ -19,8 +17,6 @@ optimized_metric: "accuracy_weighted"
 optimized_part: "val"
 direction: "max"
 
-is_shuffle: True
-
 debug: False
 print_config: True
 ignore_warnings: True
@@ -29,14 +25,16 @@ test_after_training: True
 max_epochs: 2000
 patience: 100
 
-in_dim: 43019
+in_dim: 1000
 out_dim: 2
 
-base_dir: "E:/YandexDisk/Work/pydnameth/datasets/meta/tasks/to_delete/${disease}"
-work_dir: "${base_dir}/${data_type}/models/${project_name}"
+original_work_dir: ${hydra:runtime.cwd}
+
+base_dir: "${original_work_dir}/data/${disease}"
+work_dir: "${base_dir}/${data_type}/models/${name}"
 data_dir: "${base_dir}/${data_type}"
 
-is_shap: False
+is_shap: True
 shap_explainer: Tree
 
 # Plot params
@@ -45,28 +43,28 @@ num_examples: 5
 
 # specify here default training configuration
 defaults:
+  - _self_
   - override /trainer: null # choose trainer from 'configs/trainer/'
   - override /model: null
   - override /datamodule: null
   - override /callbacks: none.yaml
   - override /logger: many_loggers.yaml # set logger here or use command line (e.g. `python run.py logger=wandb`)
+  - override /log_dir: default.yaml
   - override /hydra/hydra_logging: colorlog
   - override /hydra/job_logging: colorlog
 
 datamodule:
-  _target_: src.datamodules.dnam.DNAmDataModuleTrainValNoSplit
-  task: "binary"
-  features_fn: "${data_dir}/cpgs/${in_dim}.xlsx"
-  classes_fn: "${data_dir}/statuses/${out_dim}.xlsx"
-  trn_fn: "${data_dir}/data_GSE145361_GSE111629.pkl"
-  val_fn: "${data_dir}/data_GSE72774.pkl"
+  _target_: src.datamodules.dnam.DNAmDataModule
+  feat_fn: "${data_dir}/feat.xlsx"
+  label_fn: "${data_dir}/label.xlsx"
+  data_fn: "${data_dir}/data.xlsx"
   outcome: ${outcome}
   batch_size: 128
   num_workers: 0
   pin_memory: False
   seed: ${seed}
-  weighted_sampler: True
-  imputation: "median"
+  imputation: "fast_knn"
+  k: 1
 
 # XGBoost model params
 xgboost:

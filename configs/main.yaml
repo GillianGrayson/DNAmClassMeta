@@ -2,19 +2,17 @@
 
 # specify here defaults
 defaults:
+  - _self_
   - trainer: null
   - model: null
   - datamodule: null
   - callbacks: null
   - logger: null
+  - log_dir: default.yaml
 
   - experiment: null
   - hparams_search: null
 
-  - hydra: default.yaml
-
   # enable color logging
   - override hydra/hydra_logging: colorlog
   - override hydra/job_logging: colorlog
-
-

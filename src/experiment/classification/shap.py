@@ -115,7 +115,7 @@ def local_explain(config, y_real, y_pred, indexes, shap_values, base_values, fea
 
 def perform_shap_explanation(config, shap_data):
     for part in ['trn', 'val', 'tst', 'all']:
-        if shap_data[f"ids_{part}"] is not None:
+        if shap_data[f"ids_{part}"] is not None and len(shap_data[f"ids_{part}"]) > 0:
             Path(f"shap/global/{part}").mkdir(parents=True, exist_ok=True)
             model = shap_data['model']
             shap_kernel = shap_data['shap_kernel']
@@ -134,7 +134,7 @@ def perform_shap_explanation(config, shap_data):
                 shap_values = explainer.shap_values(X)
 
                 base_prob = list(np.mean(y_pred_prob, axis=0))
-                
+
                 # Сonvert raw SHAP values to probability SHAP values
                 shap_values_prob = copy.deepcopy(shap_values)
                 for class_id in range(0, len(class_names)):

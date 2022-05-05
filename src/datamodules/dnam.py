@@ -43,7 +43,6 @@ class DNAmDataModule(LightningDataModule):
 
     def __init__(
             self,
-            task: str = "",
             feat_fn: str = "",
             label_fn: str = "",
             data_fn: str = "",
@@ -70,14 +69,14 @@ class DNAmDataModule(LightningDataModule):
         for cl_id, cl in enumerate(self.classes_df.loc[:, self.hparams.outcome].values):
             self.classes_dict[cl] = cl_id
 
-        self.raw = pd.read_excel(f"{self.hparams.data_fn}", index_col="subject_id")
+        self.raw = pd.read_excel(f"{self.hparams.data_fn}")
+        self.ids_trn = self.raw.index[self.raw["Partition"] == "Train"].values
+        self.ids_val = self.raw.index[self.raw["Partition"] == "Validation"].values
+        self.ids_tst = self.raw.index[self.raw["Partition"] == "Test"].values
+        self.raw.set_index("subject_id", inplace=True)
         self.raw = self.raw.loc[self.raw[self.hparams.outcome].isin(self.classes_dict)]
         self.raw[f'{self.hparams.outcome}_origin'] = self.raw[self.hparams.outcome]
         self.raw[self.hparams.outcome].replace(self.classes_dict, inplace=True)
-
-        self.ids_trn = self.raw.iloc[self.raw["Partition"] == "Train"]
-        self.ids_val = self.raw.iloc[self.raw["Partition"] == "Val"]
-        self.ids_tst = self.raw.iloc[self.raw["Partition"] == "Test"]
 
         self.data = self.raw.loc[:, self.feat_names]
         is_nans = self.data.isnull().values.any()

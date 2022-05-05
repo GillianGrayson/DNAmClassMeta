@@ -29,7 +29,7 @@ def process(config: DictConfig):
         seed_everything(config.seed, workers=True)
 
     if 'wandb' in config.logger:
-        config.logger.wandb["project"] = config.project_name
+        config.logger.wandb["project"] = config.name
 
     # Init lightning loggers
     loggers: List[LightningLoggerBase] = []
@@ -52,7 +52,7 @@ def process(config: DictConfig):
     df = datamodule.get_df()
     df['pred'] = 0
     ids_tst = datamodule.ids_tst
-    if ids_tst is not None:
+    if ids_tst is not None and len(ids_tst) > 0:
         is_test = True
     else:
         is_test = False

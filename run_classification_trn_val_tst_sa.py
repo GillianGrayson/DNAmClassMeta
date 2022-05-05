@@ -7,19 +7,19 @@ from omegaconf import DictConfig
 dotenv.load_dotenv(override=True)
 
 
-@hydra.main(config_path="configs/", config_name="train.yaml")
+@hydra.main(config_path="configs/", config_name="main.yaml")
 def main(config: DictConfig):
 
     # Imports can be nested inside @hydra.main to optimize tab completion
     # https://github.com/facebookresearch/hydra/issues/934
     from src import utils
-    from src.training_pipeline import train
+    from src.experiment.classification.trn_val_tst.sa import process
 
     # Applies optional utilities
     utils.extras(config)
 
     # Train model
-    return train(config)
+    return process(config)
 
 
 if __name__ == "__main__":

@@ -2,25 +2,24 @@ import numpy as np
 from src.models.tabnet.model import TabNetModel
 import torch
 import lightgbm as lgb
-import pandas as pd
 import hydra
 from omegaconf import DictConfig
 from pytorch_lightning import (
     LightningDataModule,
     seed_everything,
 )
-from experiment.logging import log_hyperparameters
 from pytorch_lightning.loggers import LightningLoggerBase
-from src.utils import utils
-from experiment.routines import eval_classification_sa
+from src.experiment.routines import eval_classification_sa
 from typing import List
 import wandb
 from catboost import CatBoost
 import xgboost as xgb
-from experiment.multiclass.shap import perform_shap_explanation
+from src.experiment.classification.shap import perform_shap_explanation
+from src import utils
 
 
 log = utils.get_logger(__name__)
+
 
 def inference(config: DictConfig):
 
@@ -39,7 +38,7 @@ def inference(config: DictConfig):
                 loggers.append(hydra.utils.instantiate(lg_conf))
 
     log.info("Logging hyperparameters!")
-    log_hyperparameters(loggers, config)
+    utils.log_hyperparameters_sa(loggers, config)
 
     # Init Lightning datamodule for test
     log.info(f"Instantiating datamodule <{config.datamodule._target_}>")
@@ -91,8 +90,22 @@ def inference(config: DictConfig):
             X = torch.from_numpy(X)
             tmp = model(X)
             return tmp.cpu().detach().numpy()
+    elif config.model_type == "node":
+        model = TabNetModel.load_from_checkpoint(checkpoint_path=f"{config.ckpt_path}")
+        model.produce_probabilities = True
+        model.eval()
+        model.freeze()
+        X_test_pt = torch.from_numpy(X_test)
+        y_test_pred_prob = model(X_test_pt).cpu().detach().numpy()
+        model.produce_probabilities = False
+        y_test_pred_raw = model(torch.from_numpy(X_test)).cpu().detach().numpy()
+        def shap_kernel(X):
+            model.produce_probabilities = True
+            X = torch.from_numpy(X)
+            tmp = model(X)
+            return tmp.cpu().detach().numpy()
     else:
-        raise ValueError(f"Unsupported sa_model")
+        raise ValueError(f"Unsupported model")
 
     y_test_pred = np.argmax(y_test_pred_prob, 1)
 

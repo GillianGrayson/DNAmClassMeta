@@ -26,11 +26,13 @@ pytest                  # tests
 sh                      # for running bash commands in some tests
 pudb                    # debugger
 pandas>=1.4.2           # pandas
+openpyxl>=3.0.9         # xlsx support
 impyute>=0.0.8          # imputation methods
 plotly>=5.7.0           # plotting figures
 torchmetrics>=0.8.1     # ml metrics
-shap>=0.40.0            # SHAP values
+shap==0.39.0            # SHAP values
 matplotlib>=3.5.2       # plotting figures
+kaleido>=0.2.1          # offline figures
 
 # --------- models --------- #
 pytorch-tabnet>=3.1.1       # TabNet

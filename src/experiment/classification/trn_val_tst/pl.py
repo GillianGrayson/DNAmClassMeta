@@ -41,7 +41,7 @@ def process(config: DictConfig) -> Optional[float]:
     if "seed" in config:
         seed_everything(config.seed, workers=True)
 
-    config.logger.wandb["project"] = config.project_name
+    config.logger.wandb["project"] = config.name
 
     # Init lightning datamodule
     log.info(f"Instantiating datamodule <{config.datamodule._target_}>")
