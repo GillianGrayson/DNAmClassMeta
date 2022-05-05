@@ -29,5 +29,11 @@ pandas>=1.4.2           # pandas
 impyute>=0.0.8          # imputation methods
 plotly>=5.7.0           # plotting figures
 torchmetrics>=0.8.1     # ml metrics
+shap>=0.40.0            # SHAP values
+matplotlib>=3.5.2       # plotting figures
 
-# --------- ensemble tree models --------- #
+# --------- models --------- #
+pytorch-tabnet>=3.1.1       # TabNet
+xgboost>=1.6.0              # XGBoost
+catboost>=1.0.5             # CatBoost
+lightgbm>=3.3.2             # LightGBM

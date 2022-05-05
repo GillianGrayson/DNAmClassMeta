@@ -80,3 +80,33 @@ def add_bar_trace(fig, x, y, text, name="", orientation='v'):
     )
 
 
+def add_violin_trace(fig, y, name, showlegend=True):
+    fig.add_trace(
+        go.Violin(
+            y=y,
+            name=name,
+            box_visible=True,
+            meanline_visible=True,
+            showlegend=showlegend,
+        )
+    )
+
+
+def add_scatter_trace(fig, x, y, name, mode='markers', size=8):
+    showlegend = False if name == "" else True
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=y,
+            showlegend=showlegend,
+            name=name,
+            mode=mode,
+            marker=dict(
+                size=size,
+                opacity=0.7,
+                line=dict(
+                    width=0.1
+                )
+            )
+        )
+    )
