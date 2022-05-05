@@ -1,0 +1,115 @@
+# @package _global_
+
+disease: Parkinson
+data_type: non_harmonized
+model_sa: lightgbm
+outcome: "Status"
+
+tst_dataset: "GSE72774"
+
+project_name: ${disease}_${data_type}_trn_tst_${model_sa}
+
+seed: 69
+
+cv_is_split: False
+cv_n_splits: 5
+cv_n_repeats: 5
+
+optimized_metric: "accuracy_weighted"
+optimized_part: "val"
+direction: "max"
+
+is_shuffle: True
+
+debug: False
+print_config: True
+ignore_warnings: True
+test_after_training: True
+
+max_epochs: 2000
+patience: 100
+
+in_dim: 43019
+out_dim: 2
+
+base_dir: "E:/YandexDisk/Work/pydnameth/datasets/meta/tasks/to_delete/${disease}"
+work_dir: "${base_dir}/${data_type}/models/${project_name}"
+data_dir: "${base_dir}/${data_type}"
+
+is_shap: False
+shap_explainer: Tree
+
+# Plot params
+num_top_features: 5
+num_examples: 5
+
+# specify here default training configuration
+defaults:
+  - override /trainer: null # choose trainer from 'configs/trainer/'
+  - override /model: null
+  - override /datamodule: null
+  - override /callbacks: none.yaml
+  - override /logger: many_loggers.yaml # set logger here or use command line (e.g. `python run.py logger=wandb`)
+  - override /hydra/hydra_logging: colorlog
+  - override /hydra/job_logging: colorlog
+
+datamodule:
+  _target_: src.datamodules.dnam.DNAmDataModuleTrainValNoSplit
+  task: "binary"
+  features_fn: "${data_dir}/cpgs/${in_dim}.xlsx"
+  classes_fn: "${data_dir}/statuses/${out_dim}.xlsx"
+  trn_fn: "${data_dir}/data_GSE145361_GSE111629.pkl"
+  val_fn: "${data_dir}/data_GSE72774.pkl"
+  outcome: ${outcome}
+  batch_size: 128
+  num_workers: 0
+  pin_memory: False
+  seed: ${seed}
+  weighted_sampler: True
+  imputation: "median"
+
+# XGBoost model params
+xgboost:
+  output_dim: ${out_dim}
+  booster: 'gbtree'
+  learning_rate: 0.01
+  max_depth: 6
+  gamma: 0
+  sampling_method: 'uniform'
+  subsample: 1
+  objective: 'multi:softprob'
+  verbosity: 1
+  eval_metric: 'mlogloss'
+  max_epochs: ${max_epochs}
+  patience: ${patience}
+
+# CatBoost model params
+catboost:
+  output_dim: ${out_dim}
+  loss_function: 'MultiClass'
+  learning_rate: 0.01
+  depth: 4
+  min_data_in_leaf: 4
+  max_leaves: 31
+  task_type: 'CPU'
+  verbose: 1
+  max_epochs: ${max_epochs}
+  patience: ${patience}
+
+# LightGBM model params
+lightgbm:
+  output_dim: ${out_dim}
+  objective: 'multiclass'
+  boosting: 'gbdt'
+  learning_rate: 0.01
+  num_leaves: 31
+  device: 'cpu'
+  max_depth: -1
+  min_data_in_leaf: 20
+  feature_fraction: 0.9
+  bagging_fraction: 0.8
+  bagging_freq: 5
+  verbose: 0
+  metric: 'multi_logloss'
+  max_epochs: ${max_epochs}
+  patience: ${patience}
