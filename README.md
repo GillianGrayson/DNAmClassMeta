@@ -154,10 +154,10 @@ python run_classification_trn_val_tst_pl.py experiment=classification/trn_val_ts
 
 ### Hyperparameter Search
 
-To perform the hyperparametric search for the optimal combination of the parameters on the grid add `-multirun` key and specify the parameters values:
+To perform the hyperparametric search for the optimal combination of the parameters on the grid add `--multirun` key and specify the parameters values:
 
 ```bash
-python run_classification_trn_val_tst_pl.py experiment=classification/trn_val_tst/pl.yaml -multirun model_tabnet.optimizer_lr=0.001,0.005,0.01
+python run_classification_trn_val_tst_pl.py experiment=classification/trn_val_tst/pl.yaml --multirun model_tabnet.optimizer_lr=0.001,0.005,0.01
 ```
 
 ## Results
