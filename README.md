@@ -131,7 +131,7 @@ model_lightgbm:   # LightGBM model params
 model_tabnet:     # TabNet model params
   ...
 
-model_node:       # Node model params
+model_node:       # NODE model params
   ...
 ```
 
