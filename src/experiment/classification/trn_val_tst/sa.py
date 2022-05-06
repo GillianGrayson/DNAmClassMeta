@@ -87,18 +87,18 @@ def process(config: DictConfig):
             y_tst = df.loc[df.index[ids_tst], outcome_name].values
             df.loc[df.index[ids_tst], f"fold_{fold_idx:04d}"] = "test"
 
-        if config.model_sa == "xgboost":
+        if config.model_type == "xgboost":
             model_params = {
-                'num_class': config.xgboost.output_dim,
-                'booster': config.xgboost.booster,
-                'eta': config.xgboost.learning_rate,
-                'max_depth': config.xgboost.max_depth,
-                'gamma': config.xgboost.gamma,
-                'sampling_method': config.xgboost.sampling_method,
-                'subsample': config.xgboost.subsample,
-                'objective': config.xgboost.objective,
-                'verbosity': config.xgboost.verbosity,
-                'eval_metric': config.xgboost.eval_metric,
+                'num_class': config.model_xgboost.output_dim,
+                'booster': config.model_xgboost.booster,
+                'eta': config.model_xgboost.learning_rate,
+                'max_depth': config.model_xgboost.max_depth,
+                'gamma': config.model_xgboost.gamma,
+                'sampling_method': config.model_xgboost.sampling_method,
+                'subsample': config.model_xgboost.subsample,
+                'objective': config.model_xgboost.objective,
+                'verbosity': config.model_xgboost.verbosity,
+                'eval_metric': config.model_xgboost.eval_metric,
             }
 
             dmat_trn = xgb.DMatrix(X_trn, y_trn, feature_names=feature_names)
@@ -128,9 +128,9 @@ def process(config: DictConfig):
                 y_tst_pred = np.argmax(y_tst_pred_prob, 1)
 
             loss_info = {
-                'epoch': list(range(len(evals_result['train'][config.xgboost.eval_metric]))),
-                'train/loss': evals_result['train'][config.xgboost.eval_metric],
-                'val/loss': evals_result['val'][config.xgboost.eval_metric]
+                'epoch': list(range(len(evals_result['train'][config.model_xgboost.eval_metric]))),
+                'train/loss': evals_result['train'][config.model_xgboost.eval_metric],
+                'val/loss': evals_result['val'][config.model_xgboost.eval_metric]
             }
 
             def shap_kernel(X):
@@ -141,18 +141,18 @@ def process(config: DictConfig):
             fi = model.get_score(importance_type='weight')
             feature_importances = pd.DataFrame.from_dict({'feature': list(fi.keys()), 'importance': list(fi.values())})
 
-        elif config.model_sa == "catboost":
+        elif config.model_type == "catboost":
             model_params = {
-                'classes_count': config.catboost.output_dim,
-                'loss_function': config.catboost.loss_function,
-                'learning_rate': config.catboost.learning_rate,
-                'depth': config.catboost.depth,
-                'min_data_in_leaf': config.catboost.min_data_in_leaf,
-                'max_leaves': config.catboost.max_leaves,
-                'task_type': config.catboost.task_type,
-                'verbose': config.catboost.verbose,
-                'iterations': config.catboost.max_epochs,
-                'early_stopping_rounds': config.catboost.patience
+                'classes_count': config.model_catboost.output_dim,
+                'loss_function': config.model_catboost.loss_function,
+                'learning_rate': config.model_catboost.learning_rate,
+                'depth': config.model_catboost.depth,
+                'min_data_in_leaf': config.model_catboost.min_data_in_leaf,
+                'max_leaves': config.model_catboost.max_leaves,
+                'task_type': config.model_catboost.task_type,
+                'verbose': config.model_catboost.verbose,
+                'iterations': config.model_catboost.max_epochs,
+                'early_stopping_rounds': config.model_catboost.patience
             }
 
             model = CatBoost(params=model_params)
@@ -184,21 +184,21 @@ def process(config: DictConfig):
 
             feature_importances = pd.DataFrame.from_dict({'feature': model.feature_names_, 'importance': list(model.feature_importances_)})
 
-        elif config.model_sa == "lightgbm":
+        elif config.model_type == "lightgbm":
             model_params = {
-                'num_class': config.lightgbm.output_dim,
-                'objective': config.lightgbm.objective,
-                'boosting': config.lightgbm.boosting,
-                'learning_rate': config.lightgbm.learning_rate,
-                'num_leaves': config.lightgbm.num_leaves,
-                'device': config.lightgbm.device,
-                'max_depth': config.lightgbm.max_depth,
-                'min_data_in_leaf': config.lightgbm.min_data_in_leaf,
-                'feature_fraction': config.lightgbm.feature_fraction,
-                'bagging_fraction': config.lightgbm.bagging_fraction,
-                'bagging_freq': config.lightgbm.bagging_freq,
-                'verbose': config.lightgbm.verbose,
-                'metric': config.lightgbm.metric
+                'num_class': config.model_lightgbm.output_dim,
+                'objective': config.model_lightgbm.objective,
+                'boosting': config.model_lightgbm.boosting,
+                'learning_rate': config.model_lightgbm.learning_rate,
+                'num_leaves': config.model_lightgbm.num_leaves,
+                'device': config.model_lightgbm.device,
+                'max_depth': config.model_lightgbm.max_depth,
+                'min_data_in_leaf': config.model_lightgbm.min_data_in_leaf,
+                'feature_fraction': config.model_lightgbm.feature_fraction,
+                'bagging_fraction': config.model_lightgbm.bagging_fraction,
+                'bagging_freq': config.model_lightgbm.bagging_freq,
+                'verbose': config.model_lightgbm.verbose,
+                'metric': config.model_lightgbm.metric
             }
 
             ds_trn = lgb.Dataset(X_trn, label=y_trn, feature_name=feature_names)
@@ -228,9 +228,9 @@ def process(config: DictConfig):
                 y_tst_pred = np.argmax(y_tst_pred_prob, 1)
 
             loss_info = {
-                'epoch': list(range(len(evals_result['train'][config.lightgbm.metric]))),
-                'train/loss': evals_result['train'][config.lightgbm.metric],
-                'val/loss': evals_result['val'][config.lightgbm.metric]
+                'epoch': list(range(len(evals_result['train'][config.model_lightgbm.metric]))),
+                'train/loss': evals_result['train'][config.model_lightgbm.metric],
+                'val/loss': evals_result['val'][config.model_lightgbm.metric]
             }
 
             def shap_kernel(X):
@@ -240,7 +240,7 @@ def process(config: DictConfig):
             feature_importances = pd.DataFrame.from_dict({'feature': model.feature_name(), 'importance': list(model.feature_importance())})
 
         else:
-            raise ValueError(f"Model {config.model_sa} is not supported")
+            raise ValueError(f"Model {config.model_type} is not supported")
 
         metrics_trn = eval_classification_sa(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, loggers, 'train', is_log=False, is_save=False)
         metrics_val = eval_classification_sa(config, class_names, y_val, y_val_pred, y_val_pred_prob, loggers, 'val', is_log=False, is_save=False)
@@ -330,14 +330,14 @@ def process(config: DictConfig):
     else:
         raise ValueError(f"Unsupported config.optimized_part: {config.optimized_part}")
 
-    if config.model_sa == "xgboost":
+    if config.model_type == "xgboost":
         best["model"].save_model(f"epoch_{best['model'].best_iteration}_best_{best['fold']:04d}.model")
-    elif config.model_sa == "catboost":
+    elif config.model_type == "catboost":
         best["model"].save_model(f"epoch_{best['model'].best_iteration_}_best_{best['fold']:04d}.model")
-    elif config.model_sa == "lightgbm":
+    elif config.model_type == "lightgbm":
         best["model"].save_model(f"epoch_{best['model'].best_iteration}_best_{best['fold']:04d}.txt", num_iteration=best['model'].best_iteration)
     else:
-        raise ValueError(f"Model {config.model_sa} is not supported")
+        raise ValueError(f"Model {config.model_type} is not supported")
 
     save_feature_importance(best['feature_importances'], config.num_top_features)
 
