@@ -29,7 +29,6 @@ in_dim: 1000
 out_dim: 2
 
 original_work_dir: ${hydra:runtime.cwd}
-
 base_dir: "${original_work_dir}/data/${disease}"
 work_dir: "${base_dir}/${data_type}/models/${name}"
 data_dir: "${base_dir}/${data_type}"

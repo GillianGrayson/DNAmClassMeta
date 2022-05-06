@@ -1399,33 +1399,30 @@ SOFTWARE.
 
 <div align="center">
 
-# Your Project Name
+# DNAmClassMeta
 
 <a href="https://pytorch.org/get-started/locally/"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-ee4c2c?logo=pytorch&logoColor=white"></a>
 <a href="https://pytorchlightning.ai/"><img alt="Lightning" src="https://img.shields.io/badge/-Lightning-792ee5?logo=pytorchlightning&logoColor=white"></a>
 <a href="https://hydra.cc/"><img alt="Config: Hydra" src="https://img.shields.io/badge/Config-Hydra-89b8cd"></a>
 <a href="https://github.com/ashleve/lightning-hydra-template"><img alt="Template" src="https://img.shields.io/badge/-Lightning--Hydra--Template-017F2F?style=flat&logo=github&labelColor=gray"></a><br>
-[![Paper](http://img.shields.io/badge/paper-arxiv.1001.2234-B31B1B.svg)](https://www.nature.com/articles/nature14539)
-[![Conference](http://img.shields.io/badge/AnyConference-year-4b44ce.svg)](https://papers.nips.cc/paper/2020)
-
 </div>
 
 ## Description
 
-What it does
+Repository with source code for paper "Disease classification for whole blood DNA methylation: meta-analysis, missing values imputation, and XAI" by A. Kalyakulina, I. Yusipov, M.G. Bacalini, C. Franceschi, M. Vedunova, M. Ivanchenko.
 
-## How to run
+## Requirements
 
 Install dependencies
 
 ```bash
 # clone project
-git clone https://github.com/YourGithubName/your-repo-name
-cd your-repo-name
+git clone https://github.com/GillianGrayson/DNAmClassMeta
+cd DNAmClassMeta
 
 # [OPTIONAL] create conda environment
-conda create -n myenv python=3.8
-conda activate myenv
+conda create -n env_name python=3.8
+conda activate env_name
 
 # install pytorch according to instructions
 # https://pytorch.org/get-started/
@@ -1433,6 +1430,70 @@ conda activate myenv
 # install requirements
 pip install -r requirements.txt
 ```
+
+## Data description
+
+The `data` directory contains harmonized and non-harmonized data (methylation M-values for top-1000 best CpGs) for Parkinson disease and Schizophrenia for all considered GSE datasets:
+
+```
+└── data                         <- Project data
+    ├── Parkinson                   <- Data for Parkinson disease
+    │   ├── non_harmonized             <- Non-harmonized data
+    │   │   ├── data.xlsx                 <- Dataframe with methylation data and additional subjects info
+    │   │   ├── features.xlsx             <- Dataframe with features (models input)
+    │   │   └── labels.xlsx               <- Dataframe with class labels (models output)
+    │   └── harmonized                 <- Harmonized data
+    │       ├── data.xlsx                 <- Dataframe with methylation data and additional subjects info
+    │       ├── features.xlsx             <- Dataframe with features (models input)
+    │       └── labels.xlsx               <- Dataframe with class labels (models output)
+    └── Schizophrenia               <- Data for Schizophrenia
+        ├── non_harmonized             <- Non-harmonized data
+        │   ├── data.xlsx                 <- Dataframe with methylation data and additional subjects info
+        │   ├── features.xlsx             <- Dataframe with features (models input)
+        │   └── labels.xlsx               <- Dataframe with class labels (models output)
+        └── harmonized                 <- Harmonized data
+            ├── data.xlsx                 <- Dataframe with methylation data and additional subjects info
+            ├── features.xlsx             <- Dataframe with features (models input)
+            └── labels.xlsx               <- Dataframe with class labels (models output)
+```
+
+> `data.xlsx` is a dataframe, each row corresponds to subject (GSM), each column corresponds to feature. 
+> In addition to methylation levels (M-values) there are another features: `Status` (control or case), `Dataset` (original GSE) and `Partition` (Train, Validation or Test).
+
+> `features.xlsx` is a dataframe which contains features (CpGs), which will be used as input features of models. 
+> Modifying this file will change the set of features (CpGs),which will be used for building a model.
+
+> `labels.xlsx` is a dataframe which class labels.
+> Modifying this file allows to select the subset of subjects which will participate in model.
+
+## Configuring experiments
+
+There are two types of experiments based on type of model:
+- Stand-Alone (SA) models ([XGBoost](https://github.com/dmlc/xgboost), [CatBoost](https://github.com/catboost/catboost), [LightGBM](https://github.com/microsoft/LightGBM))
+- [PyTorch Lightning](https://www.pytorchlightning.ai) (PL) based models ([TabNet](https://github.com/dreamquark-ai/tabnet), [NODE](https://github.com/Qwicen/node))
+
+Configuration files for the experiments can be found in the following directory:
+```
+└── configs
+    └── experiment
+        └── classification           
+            └── trn_val_tst                 
+                ├── sa.xlsx         <- Configuration file for Stand-Alone (SA) models
+                └── pl.xlsx         <- Configuration file for PyTorch Lightning (PL) based models
+```
+
+There are common parts in these configuration files:
+
+
+## Running experiments
+
+
+## Acknowledgements
+
+
+## License
+
+This project is licensed under the MIT License.
 
 Train model with default configuration
 
