@@ -13,7 +13,7 @@ def main(config: DictConfig):
     # Imports can be nested inside @hydra.main to optimize tab completion
     # https://github.com/facebookresearch/hydra/issues/934
     from src import utils
-    from src.experiment.classification.trn_val_tst.sa import process
+    from src.experiment.classification.trn_val_tst.pl import process
 
     # Applies optional utilities
     utils.extras(config)

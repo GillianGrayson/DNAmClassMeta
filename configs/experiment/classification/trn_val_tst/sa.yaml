@@ -2,7 +2,7 @@
 
 disease: Parkinson
 data_type: harmonized
-model_sa: lightgbm
+model_sa: catboost
 outcome: "Status"
 
 name: ${disease}_${data_type}_${model_sa}

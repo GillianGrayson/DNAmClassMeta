@@ -55,7 +55,7 @@ def process(config: DictConfig) -> Optional[float]:
     df = datamodule.get_df()
     df['pred'] = 0
     ids_tst = datamodule.ids_tst
-    if ids_tst is not None:
+    if ids_tst is not None and len(ids_tst) > 0:
         is_test = True
     else:
         is_test = False

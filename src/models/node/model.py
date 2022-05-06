@@ -1,6 +1,6 @@
 from typing import Any, List
 from torch import nn
-from torchmetrics import MetricCollection, Accuracy, F1, Precision, Recall, CohenKappa, MatthewsCorrCoef, AUROC
+from torchmetrics import MetricCollection, Accuracy, F1Score, Precision, Recall, CohenKappa, MatthewsCorrCoef, AUROC
 from torchmetrics import CosineSimilarity, MeanAbsoluteError, MeanAbsolutePercentageError, MeanSquaredError, PearsonCorrCoef, R2Score, SpearmanCorrCoef
 import wandb
 from typing import Dict
@@ -45,9 +45,9 @@ class NodeModel(pl.LightningModule):
                 'accuracy_macro': Accuracy(num_classes=self.hparams.output_dim, average='macro'),
                 'accuracy_micro': Accuracy(num_classes=self.hparams.output_dim, average='micro'),
                 'accuracy_weighted': Accuracy(num_classes=self.hparams.output_dim, average='weighted'),
-                'f1_macro': F1(num_classes=self.hparams.output_dim, average='macro'),
-                'f1_micro': F1(num_classes=self.hparams.output_dim, average='micro'),
-                'f1_weighted': F1(num_classes=self.hparams.output_dim, average='weighted'),
+                'f1_macro': F1Score(num_classes=self.hparams.output_dim, average='macro'),
+                'f1_micro': F1Score(num_classes=self.hparams.output_dim, average='micro'),
+                'f1_weighted': F1Score(num_classes=self.hparams.output_dim, average='weighted'),
                 'precision_macro': Precision(num_classes=self.hparams.output_dim, average='macro'),
                 'precision_micro': Precision(num_classes=self.hparams.output_dim, average='micro'),
                 'precision_weighted': Precision(num_classes=self.hparams.output_dim, average='weighted'),
@@ -148,13 +148,13 @@ class NodeModel(pl.LightningModule):
         x, y, ind = batch
         out = self.forward(x)
         batch_size = x.size(0)
-        if self.task == "regression":
+        if self.hparams.task == "regression":
             y = y.view(batch_size, -1)
         loss = self.loss_fn(out, y)
 
         logs = {"loss": loss}
         non_logs = {}
-        if self.task == "classification":
+        if self.hparams.task == "classification":
             probs = torch.softmax(out, dim=1)
             preds = torch.argmax(out, dim=1)
             non_logs["preds"] = preds
@@ -177,7 +177,7 @@ class NodeModel(pl.LightningModule):
                     logs.update(self.metrics_val_prob(probs, y))
                 except ValueError:
                     pass
-        elif self.task == "regression":
+        elif self.hparams.task == "regression":
             if stage == "train":
                 logs.update(self.metrics_train(out, y))
             elif stage == "val":

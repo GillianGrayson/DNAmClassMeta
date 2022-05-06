@@ -154,13 +154,13 @@ class TabNetModel(pl.LightningModule):
         x, y, ind = batch
         out = self.forward(x)
         batch_size = x.size(0)
-        if self.task == "regression":
+        if self.hparams.task == "regression":
             y = y.view(batch_size, -1)
         loss = self.loss_fn(out, y)
 
         logs = {"loss": loss}
         non_logs = {}
-        if self.task == "classification":
+        if self.hparams.task == "classification":
             probs = torch.softmax(out, dim=1)
             preds = torch.argmax(out, dim=1)
             non_logs["preds"] = preds
@@ -183,7 +183,7 @@ class TabNetModel(pl.LightningModule):
                     logs.update(self.metrics_val_prob(probs, y))
                 except ValueError:
                     pass
-        elif self.task == "regression":
+        elif self.hparams.task == "regression":
             if stage == "train":
                 logs.update(self.metrics_train(out, y))
             elif stage == "val":
