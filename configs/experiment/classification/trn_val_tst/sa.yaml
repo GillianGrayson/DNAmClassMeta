@@ -2,7 +2,7 @@
 
 disease: Parkinson        # Disease type. Options: [Parkinson, Schizophrenia]
 data_type: harmonized     # Data type. Options: [non_harmonized, harmonized]
-model_type: svm           # Model type. Options: [xgboost, catboost, lightgbm, logistic_regression, svm]
+model_type: lightgbm           # Model type. Options: [xgboost, catboost, lightgbm, logistic_regression, svm]
 outcome: "Status"         # Which column in `data.xlsx` contains class labels
 
 name: ${disease}_${data_type}_${model_type}

@@ -88,10 +88,10 @@ There are common parts in these configuration files:
 ```yaml
 disease: Parkinson        # Disease type. Options: [Parkinson, Schizophrenia]
 data_type: harmonized     # Data type. Options: [non_harmonized, harmonized]
-model_type: catboost      # Model type. Options: for SA: [xgboost, catboost, lightgbm], for PL: [tabnet, node]
+model_type: catboost      # Model type. Options: for SA: [logistic_regression, svm, xgboost, catboost, lightgbm], for PL: [tabnet, node]
 outcome: "Status"         # Which column in `data.xlsx` contains class labels
 
-optimized_metric: "accuracy_weighted"   # Target metric in optimization process. Options: [accuracy_weighted, f1_weighted, auroc_weighted, ...]
+optimized_metric: "accuracy_weighted"   # Target metric in optimization process. Options: [accuracy_weighted, f1_weighted, auroc_weighted]
 optimized_mean: ""                      # Optimizing mean metric value across all cross-validation splits. Options: ["", cv_mean]
 optimized_part: "val"                   # Which partition should be optimized? Options: [trn, val, tst]
 direction: "max"                        # Optimization metrics should be minimized or maximized? Options: [max, min]
