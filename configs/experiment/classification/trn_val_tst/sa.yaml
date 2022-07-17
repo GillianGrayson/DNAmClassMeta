@@ -2,7 +2,7 @@
 
 disease: Parkinson        # Disease type. Options: [Parkinson, Schizophrenia]
 data_type: harmonized     # Data type. Options: [non_harmonized, harmonized]
-model_type: svm      # Model type. Options: for SA: [xgboost, catboost, lightgbm, logistic_regression, svm], for PL: [tabnet, node]
+model_type: svm           # Model type. Options: [xgboost, catboost, lightgbm, logistic_regression, svm]
 outcome: "Status"         # Which column in `data.xlsx` contains class labels
 
 name: ${disease}_${data_type}_${model_type}
@@ -70,7 +70,7 @@ datamodule:
   k: 1                                            # k for 'fast_knn' imputation method
 
 # XGBoost model params
-model_xgboost:
+xgboost:
   output_dim: ${out_dim}
   booster: 'gbtree'
   learning_rate: 0.01
@@ -85,7 +85,7 @@ model_xgboost:
   patience: ${patience}
 
 # CatBoost model params
-model_catboost:
+catboost:
   output_dim: ${out_dim}
   loss_function: 'MultiClass'
   learning_rate: 0.01
@@ -98,7 +98,7 @@ model_catboost:
   patience: ${patience}
 
 # LightGBM model params
-model_lightgbm:
+lightgbm:
   output_dim: ${out_dim}
   objective: 'multiclass'
   boosting: 'gbdt'

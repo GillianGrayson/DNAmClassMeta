@@ -16,9 +16,9 @@ from pytorch_lightning.loggers import LightningLoggerBase
 import numpy as np
 import pandas as pd
 from src.datamodules.cross_validation import RepeatedStratifiedKFoldCVSplitter
-from src.experiment.classification.shap import perform_shap_explanation
+from src.experiment.classification.shap import explain_shap
 from datetime import datetime
-from src.experiment.routines import eval_classification_sa, save_feature_importance
+from src.experiment.routines import eval_classification, save_feature_importance
 from pathlib import Path
 from src import utils
 
@@ -41,7 +41,8 @@ def process(config: DictConfig) -> Optional[float]:
     if "seed" in config:
         seed_everything(config.seed, workers=True)
 
-    config.logger.wandb["project"] = config.name
+    if 'wandb' in config.logger:
+        config.logger.wandb["project"] = config.name
 
     # Init lightning datamodule
     log.info(f"Instantiating datamodule <{config.datamodule._target_}>")
@@ -50,6 +51,7 @@ def process(config: DictConfig) -> Optional[float]:
     feature_names = datamodule.get_feature_names()
     num_features = len(feature_names)
     config.in_dim = num_features
+    con_features_ids, cat_features_ids = datamodule.get_con_cat_feature_ids()
     class_names = datamodule.get_class_names()
     outcome_name = datamodule.get_outcome_name()
     df = datamodule.get_df()
@@ -73,7 +75,8 @@ def process(config: DictConfig) -> Optional[float]:
         best["optimized_metric"] = np.Inf
     elif config.direction == "max":
         best["optimized_metric"] = 0.0
-    cv_progress = {'fold': [], 'optimized_metric':[]}
+
+    cv_progress = pd.DataFrame(columns=['fold', 'optimized_metric'])
 
     start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     ckpt_name = config.callbacks.model_checkpoint.filename
@@ -96,14 +99,16 @@ def process(config: DictConfig) -> Optional[float]:
 
         # Init lightning model
         if config.model_type == "tabnet":
-            config.model = config["model_tabnet"]
+            config.model = config["tabnet"]
         elif config.model_type == "node":
-            config.model = config["model_node"]
+            config.model = config["node"]
         else:
             raise ValueError(f"Unsupported model: {config.model_type}")
 
         log.info(f"Instantiating model <{config.model._target_}>")
         model: LightningModule = hydra.utils.instantiate(config.model)
+        model.ids_con = con_features_ids
+        model.ids_cat = cat_features_ids
 
         # Init lightning callbacks
         callbacks: List[Callback] = []
@@ -194,6 +199,17 @@ def process(config: DictConfig) -> Optional[float]:
         else:
             raise ValueError(f"Unsupported model: {config.model_type}")
 
+        metrics_trn = eval_classification(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, loggers, 'train', is_log=True, is_save=False)
+        for m in metrics_trn.index.values:
+            cv_progress.at[fold_idx, f"train_{m}"] = metrics_trn.at[m, 'train']
+        metrics_val = eval_classification(config, class_names, y_val, y_val_pred, y_val_pred_prob, loggers, 'val', is_log=True, is_save=False)
+        for m in metrics_val.index.values:
+            cv_progress.at[fold_idx, f"val_{m}"] = metrics_val.at[m, 'val']
+        if is_test:
+            metrics_tst = eval_classification(config, class_names, y_tst, y_tst_pred, y_tst_pred_prob, loggers, 'test', is_log=True, is_save=False)
+            for m in metrics_tst.index.values:
+                cv_progress.at[fold_idx, f"test_{m}"] = metrics_tst.at[m, 'test']
+
         # Make sure everything closed properly
         log.info("Finalizing!")
         utils.finish(
@@ -204,17 +220,6 @@ def process(config: DictConfig) -> Optional[float]:
             callbacks=callbacks,
             logger=loggers,
         )
-
-        def shap_kernel(X):
-            model.produce_probabilities = True
-            X = torch.from_numpy(X)
-            tmp = model(X)
-            return tmp.cpu().detach().numpy()
-
-        metrics_trn = eval_classification_sa(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, loggers, 'train', is_log=False, is_save=False)
-        metrics_val = eval_classification_sa(config, class_names, y_val, y_val_pred, y_val_pred_prob, loggers, 'val', is_log=False, is_save=False)
-        if is_test:
-            metrics_tst = eval_classification_sa(config, class_names, y_tst, y_tst_pred, y_tst_pred_prob, loggers, 'test', is_log=False, is_save=False)
 
         if config.optimized_part == "train":
             metrics_main = metrics_trn
@@ -253,7 +258,15 @@ def process(config: DictConfig) -> Optional[float]:
                     raise ValueError(f"Unsupported model: {config.model_type}")
             best["model"] = model
             best["trainer"] = trainer
-            best['shap_kernel'] = shap_kernel
+
+            def predict_func(X):
+                X = np.float32(X)
+                best["model"].produce_probabilities = True
+                X = torch.from_numpy(X)
+                tmp = best["model"](X)
+                return tmp.cpu().detach().numpy()
+
+            best['predict_func'] = predict_func
             best['feature_importances'] = feature_importances
             best['fold'] = fold_idx
             best['ids_trn'] = ids_trn
@@ -271,13 +284,11 @@ def process(config: DictConfig) -> Optional[float]:
                     df.loc[df.index[ids_tst], f"pred_prob_{cl_id}"] = y_tst_pred_prob[:, cl_id]
                     df.loc[df.index[ids_tst], f"pred_raw_{cl_id}"] = y_tst_pred_raw[:, cl_id]
 
-        cv_progress['fold'].append(fold_idx)
-        cv_progress['optimized_metric'].append(metrics_main.at[config.optimized_metric, config.optimized_part])
+        cv_progress.at[fold_idx, 'fold'] = fold_idx
+        cv_progress.at[fold_idx, 'optimized_metric'] = metrics_main.at[config.optimized_metric, config.optimized_part]
 
-    cv_progress_df = pd.DataFrame(cv_progress)
-    cv_progress_df.set_index('fold', inplace=True)
-    cv_progress_df.to_excel(f"cv_progress.xlsx", index=True)
-    cv_ids = df.loc[:, [f"fold_{fold_idx:04d}" for fold_idx in cv_progress['fold']]]
+    cv_progress.to_excel(f"cv_progress.xlsx", index=False)
+    cv_ids = df.loc[:, [f"fold_{fold_idx:04d}" for fold_idx in cv_progress.loc[:, 'fold'].values]]
     cv_ids.to_excel(f"cv_ids.xlsx", index=True)
     predictions = df.loc[:, [f"fold_{best['fold']:04d}", outcome_name, "pred"] + [f"pred_prob_{cl_id}" for cl_id, cl in enumerate(class_names)]]
     predictions.to_excel(f"predictions.xlsx", index=True)
@@ -298,10 +309,37 @@ def process(config: DictConfig) -> Optional[float]:
         y_tst_pred = df.loc[df.index[datamodule.ids_tst], "pred"].values
         y_tst_pred_prob = df.loc[df.index[datamodule.ids_tst], [f"pred_prob_{cl_id}" for cl_id, cl in enumerate(class_names)]].values
 
-    metrics_trn = eval_classification_sa(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, loggers, 'train', is_log=False, is_save=True, suffix=f"_best_{best['fold']:04d}")
-    metrics_val = eval_classification_sa(config, class_names, y_val, y_val_pred, y_val_pred_prob, loggers, 'val', is_log=False, is_save=True, suffix=f"_best_{best['fold']:04d}")
+    metrics_trn = eval_classification(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, None, 'train', is_log=False, is_save=True, file_suffix=f"_best_{best['fold']:04d}")
+    metrics_names = metrics_trn.index.values
+    metrics_trn_cv_mean = pd.DataFrame(index=[f"{x}_cv_mean" for x in metrics_names], columns=['train'])
+    for metric in metrics_names:
+        metrics_trn_cv_mean.at[f"{metric}_cv_mean", 'train'] = cv_progress[f"train_{metric}"].mean()
+    metrics_trn = pd.concat([metrics_trn, metrics_trn_cv_mean])
+    metrics_trn.to_excel(f"metrics_train_best_{best['fold']:04d}.xlsx", index=True)
+
+    metrics_val = eval_classification(config, class_names, y_val, y_val_pred, y_val_pred_prob, None, 'val', is_log=False, is_save=True, file_suffix=f"_best_{best['fold']:04d}")
+    metrics_val_cv_mean = pd.DataFrame(index=[f"{x}_cv_mean" for x in metrics_names], columns=['val'])
+    for metric in metrics_names:
+        metrics_val_cv_mean.at[f"{metric}_cv_mean", 'val'] = cv_progress[f"val_{metric}"].mean()
+    metrics_val = pd.concat([metrics_val, metrics_val_cv_mean])
+    metrics_val.to_excel(f"metrics_val_best_{best['fold']:04d}.xlsx", index=True)
+
     if is_test:
-        metrics_tst = eval_classification_sa(config, class_names, y_tst, y_tst_pred, y_tst_pred_prob, loggers, 'test', is_log=False, is_save=True, suffix=f"_best_{best['fold']:04d}")
+        metrics_tst = eval_classification(config, class_names, y_tst, y_tst_pred, y_tst_pred_prob, None, 'test', is_log=False, is_save=True, file_suffix=f"_best_{best['fold']:04d}")
+        metrics_tst_cv_mean = pd.DataFrame(index=[f"{x}_cv_mean" for x in metrics_names], columns=['test'])
+        for metric in metrics_names:
+            metrics_tst_cv_mean.at[f"{metric}_cv_mean", 'test'] = cv_progress[f"test_{metric}"].mean()
+        metrics_tst = pd.concat([metrics_tst, metrics_tst_cv_mean])
+
+        metrics_val_tst_cv_mean = pd.DataFrame(index=[f"{x}_cv_mean_val_test" for x in metrics_names], columns=['val', 'test'])
+        for metric in metrics_names:
+            val_test_value = 0.5 * (metrics_val.at[f"{metric}_cv_mean", 'val'] + metrics_tst.at[f"{metric}_cv_mean", 'test'])
+            metrics_val_tst_cv_mean.at[f"{metric}_cv_mean_val_test", 'val'] = val_test_value
+            metrics_val_tst_cv_mean.at[f"{metric}_cv_mean_val_test", 'test'] = val_test_value
+        metrics_val = pd.concat([metrics_val, metrics_val_tst_cv_mean.loc[:, ['val']]])
+        metrics_tst = pd.concat([metrics_tst, metrics_val_tst_cv_mean.loc[:, ['test']]])
+        metrics_val.to_excel(f"metrics_val_best_{best['fold']:04d}.xlsx", index=True)
+        metrics_tst.to_excel(f"metrics_test_best_{best['fold']:04d}.xlsx", index=True)
 
     if config.optimized_part == "train":
         metrics_main = metrics_trn
@@ -315,22 +353,26 @@ def process(config: DictConfig) -> Optional[float]:
     if best['feature_importances'] is not None:
         save_feature_importance(best['feature_importances'], config.num_top_features)
 
+    expl_data = {
+        'model': best["model"],
+        'predict_func': best['predict_func'],
+        'df': df,
+        'feature_names': feature_names,
+        'class_names': class_names,
+        'outcome_name': outcome_name,
+        'ids_all': np.arange(df.shape[0]),
+        'ids_trn': datamodule.ids_trn,
+        'ids_val': datamodule.ids_val,
+        'ids_tst': datamodule.ids_tst
+    }
     if config.is_shap == True:
-        shap_data = {
-            'model': best["model"],
-            'shap_kernel': best['shap_kernel'],
-            'df': df,
-            'feature_names': feature_names,
-            'class_names': class_names,
-            'outcome_name': outcome_name,
-            'ids_all': np.arange(df.shape[0]),
-            'ids_trn': datamodule.ids_trn,
-            'ids_val': datamodule.ids_val,
-            'ids_tst': datamodule.ids_tst
-        }
-        perform_shap_explanation(config, shap_data)
+        explain_shap(config, expl_data)
 
     # Return metric score for hyperparameter optimization
     optimized_metric = config.get("optimized_metric")
+    optimized_mean = config.get("optimized_mean")
     if optimized_metric:
-        return metrics_main.at[optimized_metric, config.optimized_part]
+        if optimized_mean == "":
+            return metrics_main.at[optimized_metric, config.optimized_part]
+        else:
+            return metrics_main.at[f"{optimized_metric}_{optimized_mean}", config.optimized_part]

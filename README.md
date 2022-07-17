@@ -70,7 +70,7 @@ The `data` directory contains harmonized and non-harmonized data (methylation M-
 ## Configuring experiments
 
 There are two types of experiments based on type of model:
-- Stand-Alone (SA) models ([XGBoost](https://github.com/dmlc/xgboost), [CatBoost](https://github.com/catboost/catboost), [LightGBM](https://github.com/microsoft/LightGBM))
+- Stand-Alone (SA) models ([Logistic Regression](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html), [SVM](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html), [XGBoost](https://github.com/dmlc/xgboost), [CatBoost](https://github.com/catboost/catboost), [LightGBM](https://github.com/microsoft/LightGBM))
 - [PyTorch Lightning](https://www.pytorchlightning.ai) (PL) based models ([TabNet](https://github.com/dreamquark-ai/tabnet), [NODE](https://github.com/Qwicen/node))
 
 Configuration files for the experiments can be found in the following directory:
@@ -92,14 +92,17 @@ model_type: catboost      # Model type. Options: for SA: [xgboost, catboost, lig
 outcome: "Status"         # Which column in `data.xlsx` contains class labels
 
 optimized_metric: "accuracy_weighted"   # Target metric in optimization process. Options: [accuracy_weighted, f1_weighted, auroc_weighted, ...]
+optimized_mean: ""                      # Optimizing mean metric value across all cross-validation splits. Options: ["", cv_mean]
 optimized_part: "val"                   # Which partition should be optimized? Options: [trn, val, tst]
 direction: "max"                        # Optimization metrics should be minimized or maximized? Options: [max, min]
 
 max_epochs: 2000  # Maximum number of epochs in training process
 patience: 100     # How many validation epochs of not improving until training stops
 
-is_shap: True         # SHAP values calculation. Options: [True, False]
-shap_explainer: Tree  # Explainer type for SHAP values. Options: for SA: [Tree, Kernel], for PL: [Deep, Kernel]
+is_shap: True                    # SHAP values calculation. Options: [True, False]
+is_shap_save: False               # Save SHAP values to file?
+shap_explainer: Tree              # Explainer type for SHAP values. Options: for SA: [Tree, Kernel], for PL: [Deep, Kernel]
+shap_bkgrd: tree_path_dependent   # Background for calculating SHAP values. Options: [trn, all, tree_path_dependent]. Last option works only for GBDT models
 
 datamodule:
   _target_: src.datamodules.dnam.DNAmDataModule   # Instantiated datamodule
@@ -118,20 +121,25 @@ datamodule:
 Parameters of models can be changed in corresponding blocks of configuration files:
 
 ```yaml
-
-model_xgboost:    # XGBoost model params
+logistic_regression:    # Logistic Regression model params
   ...
 
-model_catboost:   # CatBoost model params
+svm:    # SVM params
   ...
 
-model_lightgbm:   # LightGBM model params
+xgboost:    # XGBoost model params
   ...
 
-model_tabnet:     # TabNet model params
+catboost:   # CatBoost model params
   ...
 
-model_node:       # NODE model params
+lightgbm:   # LightGBM model params
+  ...
+
+tabnet:     # TabNet model params
+  ...
+
+node:       # NODE model params
   ...
 ```
 
