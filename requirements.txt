@@ -8,9 +8,10 @@ torchmetrics>=0.7.0
 hydra-core>=1.1.0
 hydra-colorlog>=1.1.0
 hydra-optuna-sweeper>=1.1.0
+omegaconf>=2.1.1
 
 # --------- loggers --------- #
-wandb
+wandb==0.11.2
 
 # --------- linters --------- #
 pre-commit      # hooks for applying linters on commit
@@ -25,17 +26,31 @@ rich                    # beautiful text formatting in terminal
 pytest                  # tests
 sh                      # for running bash commands in some tests
 pudb                    # debugger
-pandas>=1.4.2           # pandas
+
+# --------- dataframes --------- #
+pandas>=1.4.2           # dataframes
 openpyxl>=3.0.9         # xlsx support
+
+# --------- imputation --------- #
 impyute>=0.0.8          # imputation methods
-plotly>=5.7.0           # plotting figures
-torchmetrics>=0.8.1     # ml metrics
+
+# --------- plot --------- #
+plotly>=5.7.0
+matplotlib>=3.5.2
+kaleido==0.1.0post1
+
+# --------- XAI --------- #
 shap==0.39.0            # SHAP values
-matplotlib>=3.5.2       # plotting figures
-kaleido>=0.2.1          # offline figures
 
 # --------- models --------- #
-pytorch-tabnet>=3.1.1       # TabNet
-xgboost>=1.6.0              # XGBoost
-catboost>=1.0.5             # CatBoost
-lightgbm>=3.3.2             # LightGBM
+pytorch-tabnet>=3.1.1
+xgboost>=1.6.0
+catboost>=1.0.5
+lightgbm>=3.3.2
+statsmodels>=0.13.1
+scikit-learn>=1.0.2
+einops>=0.4.1
+numpy>=1.22.3
+
+# --------- utils --------- #
+tqdm>=4.63.1
