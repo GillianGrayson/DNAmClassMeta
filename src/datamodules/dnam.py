@@ -2,9 +2,7 @@ from typing import Optional, Tuple
 from src import utils
 import torch
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import ConcatDataset, DataLoader, Dataset, random_split, Subset, WeightedRandomSampler
-from torchvision.datasets import MNIST
-from torchvision.transforms import transforms
+from torch.utils.data import DataLoader, Dataset, Subset, WeightedRandomSampler
 import pandas as pd
 from impyute.imputation.cs import fast_knn, mean, median, random, mice, mode, em
 from collections import Counter
@@ -60,6 +58,8 @@ class DNAmDataModule(LightningDataModule):
         # this line allows to access init params with 'self.hparams' attribute
         self.save_hyperparameters(logger=False)
 
+        self.split_feature = None
+
         self.dataloaders_evaluate = False
 
         self.feat_names = pd.read_excel(self.hparams.feat_fn).loc[:, 'feature'].values
@@ -72,6 +72,7 @@ class DNAmDataModule(LightningDataModule):
         self.raw = pd.read_excel(f"{self.hparams.data_fn}")
         self.ids_trn = self.raw.index[self.raw["Partition"] == "Train"].values
         self.ids_val = self.raw.index[self.raw["Partition"] == "Validation"].values
+        self.ids_trn_val = self.raw.index[(self.raw["Partition"] == "Train") | (self.raw["Partition"] == "Validation")].values
         self.ids_tst = self.raw.index[self.raw["Partition"] == "Test"].values
         self.raw.set_index("subject_id", inplace=True)
         self.raw = self.raw.loc[self.raw[self.hparams.outcome].isin(self.classes_dict)]
@@ -103,6 +104,9 @@ class DNAmDataModule(LightningDataModule):
             self.data.loc[:, :] = imputed_training
         self.data = self.data.astype('float32')
 
+        self.con_features_ids = None
+        self.cat_features_ids = None
+
         self.output = self.raw.loc[:, [self.hparams.outcome, f'{self.hparams.outcome}_origin']]
 
         if not list(self.data.index.values) == list(self.output.index.values):
@@ -126,6 +130,11 @@ class DNAmDataModule(LightningDataModule):
         self.dataset_trn = Subset(self.dataset, self.ids_trn)
         self.dataset_val = Subset(self.dataset, self.ids_val)
         self.dataset_tst = Subset(self.dataset, self.ids_tst)
+
+        log.info(f"total_count: {len(self.dataset)}")
+        log.info(f"trn_count: {len(self.dataset_trn)}")
+        log.info(f"val_count: {len(self.dataset_val)}")
+        log.info(f"tst_count: {len(self.dataset_tst)}")
 
     def perform_split(self):
         self.dataset_trn = Subset(self.dataset, self.ids_trn)
@@ -205,6 +214,9 @@ class DNAmDataModule(LightningDataModule):
 
     def get_feature_names(self):
         return self.data.columns.to_list()
+
+    def get_con_cat_feature_ids(self):
+        return self.con_features_ids, self.cat_features_ids
 
     def get_outcome_name(self):
         return self.hparams.outcome

@@ -8,15 +8,19 @@ from pytorch_lightning import (
 from pytorch_lightning.loggers import LightningLoggerBase
 import pandas as pd
 import xgboost as xgb
-from src.experiment.routines import eval_classification_sa, eval_loss, save_feature_importance
+from src.experiment.routines import eval_classification, eval_loss, save_feature_importance
 from typing import List
 from catboost import CatBoost
 import lightgbm as lgb
 import wandb
 from src.datamodules.cross_validation import RepeatedStratifiedKFoldCVSplitter
-from src.experiment.classification.shap import perform_shap_explanation
+from src.experiment.classification.shap import explain_shap
+from sklearn.linear_model import LogisticRegression
+from sklearn import svm
+from datetime import datetime
 from tqdm import tqdm
 from src import utils
+import pickle
 
 
 log = utils.get_logger(__name__)
@@ -30,17 +34,6 @@ def process(config: DictConfig):
 
     if 'wandb' in config.logger:
         config.logger.wandb["project"] = config.name
-
-    # Init lightning loggers
-    loggers: List[LightningLoggerBase] = []
-    if "logger" in config:
-        for _, lg_conf in config.logger.items():
-            if "_target_" in lg_conf:
-                log.info(f"Instantiating logger <{lg_conf._target_}>")
-                loggers.append(hydra.utils.instantiate(lg_conf))
-
-    log.info("Logging hyperparameters!")
-    utils.log_hyperparameters_sa(config, loggers)
 
     # Init lightning datamodule
     log.info(f"Instantiating datamodule <{config.datamodule._target_}>")
@@ -70,7 +63,10 @@ def process(config: DictConfig):
         best["optimized_metric"] = np.Inf
     elif config.direction == "max":
         best["optimized_metric"] = 0.0
-    cv_progress = {'fold': [], 'optimized_metric': []}
+
+    cv_progress = pd.DataFrame(columns=['fold', 'optimized_metric'])
+
+    start_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     for fold_idx, (ids_trn, ids_val) in tqdm(enumerate(cv_splitter.split())):
         datamodule.ids_trn = ids_trn
@@ -86,6 +82,22 @@ def process(config: DictConfig):
             X_tst = df.loc[df.index[ids_tst], feature_names].values
             y_tst = df.loc[df.index[ids_tst], outcome_name].values
             df.loc[df.index[ids_tst], f"fold_{fold_idx:04d}"] = "test"
+
+        if 'csv' in config.logger:
+            config.logger.csv["version"] = f"fold_{fold_idx}"
+        if 'wandb' in config.logger:
+            config.logger.wandb["version"] = f"fold_{fold_idx}_{start_time}"
+
+        # Init lightning loggers
+        loggers: List[LightningLoggerBase] = []
+        if "logger" in config:
+            for _, lg_conf in config.logger.items():
+                if "_target_" in lg_conf:
+                    log.info(f"Instantiating logger <{lg_conf._target_}>")
+                    loggers.append(hydra.utils.instantiate(lg_conf))
+
+        log.info("Logging hyperparameters!")
+        utils.log_hyperparameters_sa(config, loggers)
 
         if config.model_type == "xgboost":
             model_params = {
@@ -133,11 +145,6 @@ def process(config: DictConfig):
                 'val/loss': evals_result['val'][config.model_xgboost.eval_metric]
             }
 
-            def shap_kernel(X):
-                X = xgb.DMatrix(X, feature_names=feature_names)
-                y = model.predict(X)
-                return y
-
             fi = model.get_score(importance_type='weight')
             feature_importances = pd.DataFrame.from_dict({'feature': list(fi.keys()), 'importance': list(fi.values())})
 
@@ -177,10 +184,6 @@ def process(config: DictConfig):
                 'train/loss': metrics_trn.iloc[:, 1],
                 'val/loss': metrics_val.iloc[:, 1]
             }
-
-            def shap_kernel(X):
-                y = model.predict(X, prediction_type="Probability")
-                return y
 
             feature_importances = pd.DataFrame.from_dict({'feature': model.feature_names_, 'importance': list(model.feature_importances_)})
 
@@ -233,19 +236,98 @@ def process(config: DictConfig):
                 'val/loss': evals_result['val'][config.model_lightgbm.metric]
             }
 
-            def shap_kernel(X):
-                y = model.predict(X, num_iteration=model.best_iteration)
-                return y
-
             feature_importances = pd.DataFrame.from_dict({'feature': model.feature_name(), 'importance': list(model.feature_importance())})
+
+        elif config.model_type == "logistic_regression":
+            model = LogisticRegression(
+                penalty=config.logistic_regression.penalty,
+                l1_ratio=config.logistic_regression.l1_ratio,
+                C=config.logistic_regression.C,
+                multi_class=config.logistic_regression.multi_class,
+                solver=config.logistic_regression.solver,
+                max_iter=config.logistic_regression.max_iter,
+                tol=config.logistic_regression.tol,
+                verbose=config.logistic_regression.verbose,
+            ).fit(X_trn, y_trn)
+
+            y_trn_pred_prob = model.predict_proba(X_trn)
+            y_val_pred_prob = model.predict_proba(X_val)
+            y_trn_pred_raw = model.predict_proba(X_trn)
+            y_val_pred_raw = model.predict_proba(X_val)
+            y_trn_pred = model.predict(X_trn)
+            y_val_pred = model.predict(X_val)
+            if is_test:
+                y_tst_pred_prob = model.predict_proba(X_tst)
+                y_tst_pred_raw = model.predict_proba(X_tst)
+                y_tst_pred = model.predict(X_tst)
+
+            loss_info = {
+                'epoch': [0],
+                'train/loss': [0],
+                'val/loss': [0]
+            }
+
+            feature_importances = pd.DataFrame.from_dict(
+                {
+                    'feature': ['Intercept'] + feature_names,
+                    'importance': [model.intercept_] + list(model.coef_.ravel())
+                }
+            )
+
+        elif config.model_type == "svm":
+            model = svm.SVC(
+                C=config.svm.C,
+                kernel=config.svm.kernel,
+                decision_function_shape=config.svm.decision_function_shape,
+                max_iter=config.svm.max_iter,
+                tol=config.svm.tol,
+                verbose=config.svm.verbose,
+                probability=True
+            ).fit(X_trn, y_trn)
+
+            y_trn_pred_prob = model.predict_proba(X_trn)
+            y_val_pred_prob = model.predict_proba(X_val)
+            y_trn_pred_raw = model.predict_proba(X_trn)
+            y_val_pred_raw = model.predict_proba(X_val)
+            y_trn_pred = model.predict(X_trn)
+            y_val_pred = model.predict(X_val)
+            if is_test:
+                y_tst_pred_prob = model.predict_proba(X_tst)
+                y_tst_pred_raw = model.predict_proba(X_tst)
+                y_tst_pred = model.predict(X_tst)
+
+            loss_info = {
+                'epoch': [0],
+                'train/loss': [0],
+                'val/loss': [0]
+            }
+
+            feature_importances = None
 
         else:
             raise ValueError(f"Model {config.model_type} is not supported")
 
-        metrics_trn = eval_classification_sa(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, loggers, 'train', is_log=False, is_save=False)
-        metrics_val = eval_classification_sa(config, class_names, y_val, y_val_pred, y_val_pred_prob, loggers, 'val', is_log=False, is_save=False)
+        metrics_trn = eval_classification(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, loggers, 'train', is_log=True, is_save=False)
+        for m in metrics_trn.index.values:
+            cv_progress.at[fold_idx, f"train_{m}"] = metrics_trn.at[m, 'train']
+        metrics_val = eval_classification(config, class_names, y_val, y_val_pred, y_val_pred_prob, loggers, 'val', is_log=True, is_save=False)
+        for m in metrics_val.index.values:
+            cv_progress.at[fold_idx, f"val_{m}"] = metrics_val.at[m, 'val']
         if is_test:
-            metrics_tst = eval_classification_sa(config, class_names, y_tst, y_tst_pred, y_tst_pred_prob, loggers, 'test', is_log=False, is_save=False)
+            metrics_tst = eval_classification(config, class_names, y_tst, y_tst_pred, y_tst_pred_prob, loggers, 'test', is_log=True, is_save=False)
+            for m in metrics_tst.index.values:
+                cv_progress.at[fold_idx, f"test_{m}"] = metrics_tst.at[m, 'test']
+
+        if 'wandb' in config.logger:
+            wandb.define_metric(f"epoch")
+            wandb.define_metric(f"train/loss")
+            wandb.define_metric(f"val/loss")
+        eval_loss(loss_info, loggers, is_log=True, is_save=False)
+
+        for logger in loggers:
+            logger.save()
+        if 'wandb' in config.logger:
+            wandb.finish()
 
         if config.optimized_part == "train":
             metrics_main = metrics_trn
@@ -271,7 +353,32 @@ def process(config: DictConfig):
             best["optimized_metric"] = metrics_main.at[config.optimized_metric, config.optimized_part]
             best["model"] = model
             best['loss_info'] = loss_info
-            best['shap_kernel'] = shap_kernel
+
+            if config.model_type == "xgboost":
+                def predict_func(X):
+                    X = xgb.DMatrix(X, feature_names=feature_names)
+                    y = best["model"].predict(X)
+                    return y
+            elif config.model_type == "catboost":
+                def predict_func(X):
+                    y = best["model"].predict(X, prediction_type="Probability")
+                    return y
+            elif config.model_type == "lightgbm":
+                def predict_func(X):
+                    y = best["model"].predict(X, num_iteration=best["model"].best_iteration)
+                    return y
+            elif config.model_type == "logistic_regression":
+                def predict_func(X):
+                    y = best["model"].predict_proba(X)
+                    return y
+            elif config.model_type == "svm":
+                def predict_func(X):
+                    y = best["model"].predict_proba(X)
+                    return y
+            else:
+                raise ValueError(f"Model {config.model_type} is not supported")
+
+            best['predict_func'] = predict_func
             best['feature_importances'] = feature_importances
             best['fold'] = fold_idx
             best['ids_trn'] = ids_trn
@@ -289,13 +396,11 @@ def process(config: DictConfig):
                     df.loc[df.index[ids_tst], f"pred_prob_{cl_id}"] = y_tst_pred_prob[:, cl_id]
                     df.loc[df.index[ids_tst], f"pred_raw_{cl_id}"] = y_tst_pred_raw[:, cl_id]
 
-        cv_progress['fold'].append(fold_idx)
-        cv_progress['optimized_metric'].append(metrics_main.at[config.optimized_metric, config.optimized_part])
+        cv_progress.at[fold_idx, 'fold'] = fold_idx
+        cv_progress.at[fold_idx, 'optimized_metric'] = metrics_main.at[config.optimized_metric, config.optimized_part]
 
-    cv_progress_df = pd.DataFrame(cv_progress)
-    cv_progress_df.set_index('fold', inplace=True)
-    cv_progress_df.to_excel(f"cv_progress.xlsx", index=True)
-    cv_ids = df.loc[:, [f"fold_{fold_idx:04d}" for fold_idx in cv_progress['fold']]]
+    cv_progress.to_excel(f"cv_progress.xlsx", index=False)
+    cv_ids = df.loc[:, [f"fold_{fold_idx:04d}" for fold_idx in cv_progress.loc[:,'fold'].values]]
     cv_ids.to_excel(f"cv_ids.xlsx", index=True)
     predictions = df.loc[:, [f"fold_{best['fold']:04d}", outcome_name, "pred"] + [f"pred_prob_{cl_id}" for cl_id, cl in enumerate(class_names)]]
     predictions.to_excel(f"predictions.xlsx", index=True)
@@ -316,10 +421,39 @@ def process(config: DictConfig):
         y_tst_pred = df.loc[df.index[datamodule.ids_tst], "pred"].values
         y_tst_pred_prob = df.loc[df.index[datamodule.ids_tst], [f"pred_prob_{cl_id}" for cl_id, cl in enumerate(class_names)]].values
 
-    metrics_trn = eval_classification_sa(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, loggers, 'train', is_log=True, is_save=True, suffix=f"_best_{best['fold']:04d}")
-    metrics_val = eval_classification_sa(config, class_names, y_val, y_val_pred, y_val_pred_prob, loggers, 'val', is_log=True, is_save=True, suffix=f"_best_{best['fold']:04d}")
+    metrics_trn = eval_classification(config, class_names, y_trn, y_trn_pred, y_trn_pred_prob, None, 'train', is_log=False, is_save=True, file_suffix=f"_best_{best['fold']:04d}")
+    metrics_names = metrics_trn.index.values
+    metrics_trn_cv_mean = pd.DataFrame(index=[f"{x}_cv_mean" for x in metrics_names], columns=['train'])
+    for metric in metrics_names:
+        metrics_trn_cv_mean.at[f"{metric}_cv_mean", 'train'] = cv_progress[f"train_{metric}"].mean()
+    metrics_trn = pd.concat([metrics_trn, metrics_trn_cv_mean])
+    metrics_trn.to_excel(f"metrics_train_best_{best['fold']:04d}.xlsx", index=True)
+
+    metrics_val = eval_classification(config, class_names, y_val, y_val_pred, y_val_pred_prob, None, 'val', is_log=False, is_save=True, file_suffix=f"_best_{best['fold']:04d}")
+    metrics_val_cv_mean = pd.DataFrame(index=[f"{x}_cv_mean" for x in metrics_names], columns=['val'])
+    for metric in metrics_names:
+        metrics_val_cv_mean.at[f"{metric}_cv_mean", 'val'] = cv_progress[f"val_{metric}"].mean()
+    metrics_val = pd.concat([metrics_val, metrics_val_cv_mean])
+    metrics_val.to_excel(f"metrics_val_best_{best['fold']:04d}.xlsx", index=True)
+
     if is_test:
-        metrics_tst = eval_classification_sa(config, class_names, y_tst, y_tst_pred, y_tst_pred_prob, loggers, 'test', is_log=True, is_save=True, suffix=f"_best_{best['fold']:04d}")
+        metrics_tst = eval_classification(config, class_names, y_tst, y_tst_pred, y_tst_pred_prob, None, 'test', is_log=False, is_save=True, file_suffix=f"_best_{best['fold']:04d}")
+        metrics_tst_cv_mean = pd.DataFrame(index=[f"{x}_cv_mean" for x in metrics_names], columns=['test'])
+        for metric in metrics_names:
+            metrics_tst_cv_mean.at[f"{metric}_cv_mean", 'test'] = cv_progress[f"test_{metric}"].mean()
+        metrics_tst = pd.concat([metrics_tst, metrics_tst_cv_mean])
+
+        metrics_val_tst_cv_mean = pd.DataFrame(index=[f"{x}_cv_mean_val_test" for x in metrics_names], columns=['val', 'test'])
+        for metric in metrics_names:
+            val_test_value = 0.5 * (metrics_val.at[f"{metric}_cv_mean", 'val'] + metrics_tst.at[f"{metric}_cv_mean", 'test'])
+            metrics_val_tst_cv_mean.at[f"{metric}_cv_mean_val_test", 'val'] = val_test_value
+            metrics_val_tst_cv_mean.at[f"{metric}_cv_mean_val_test", 'test'] = val_test_value
+        metrics_val = pd.concat([metrics_val, metrics_val_tst_cv_mean.loc[:, ['val']]])
+        metrics_tst = pd.concat([metrics_tst, metrics_val_tst_cv_mean.loc[:, ['test']]])
+        metrics_val.to_excel(f"metrics_val_best_{best['fold']:04d}.xlsx", index=True)
+        metrics_tst.to_excel(f"metrics_test_best_{best['fold']:04d}.xlsx", index=True)
+
+    eval_loss(best['loss_info'], None, is_log=True, is_save=False, file_suffix=f"_best_{best['fold']:04d}")
 
     if config.optimized_part == "train":
         metrics_main = metrics_trn
@@ -336,37 +470,35 @@ def process(config: DictConfig):
         best["model"].save_model(f"epoch_{best['model'].best_iteration_}_best_{best['fold']:04d}.model")
     elif config.model_type == "lightgbm":
         best["model"].save_model(f"epoch_{best['model'].best_iteration}_best_{best['fold']:04d}.txt", num_iteration=best['model'].best_iteration)
+    elif config.model_type == "logistic_regression":
+        pickle.dump(best["model"], open(f"logistic_regression_best_{best['fold']:04d}.pkl", 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+    elif config.model_type == "svm":
+        pickle.dump(best["model"], open(f"svm_best_{best['fold']:04d}.pkl", 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
     else:
         raise ValueError(f"Model {config.model_type} is not supported")
 
     save_feature_importance(best['feature_importances'], config.num_top_features)
 
-    if 'wandb' in config.logger:
-        wandb.define_metric(f"epoch")
-        wandb.define_metric(f"train/loss")
-        wandb.define_metric(f"val/loss")
-    eval_loss(best['loss_info'], loggers)
-
-    for logger in loggers:
-        logger.save()
-    if 'wandb' in config.logger:
-        wandb.finish()
+    expl_data = {
+        'model': best["model"],
+        'predict_func': best['predict_func'],
+        'df': df,
+        'feature_names': feature_names,
+        'class_names': class_names,
+        'outcome_name': outcome_name,
+        'ids_all': np.arange(df.shape[0]),
+        'ids_trn': datamodule.ids_trn,
+        'ids_val': datamodule.ids_val,
+        'ids_tst': datamodule.ids_tst
+    }
 
     if config.is_shap == True:
-        shap_data = {
-            'model': best["model"],
-            'shap_kernel': best['shap_kernel'],
-            'df': df,
-            'feature_names': feature_names,
-            'class_names': class_names,
-            'outcome_name': outcome_name,
-            'ids_all': np.arange(df.shape[0]),
-            'ids_trn': datamodule.ids_trn,
-            'ids_val': datamodule.ids_val,
-            'ids_tst': datamodule.ids_tst
-        }
-        perform_shap_explanation(config, shap_data)
+        explain_shap(config, expl_data)
 
     optimized_metric = config.get("optimized_metric")
+    optimized_mean = config.get("optimized_mean")
     if optimized_metric:
-        return metrics_main.at[optimized_metric, config.optimized_part]
+        if optimized_mean == "":
+            return metrics_main.at[optimized_metric, config.optimized_part]
+        else:
+            return metrics_main.at[f"{optimized_metric}_{optimized_mean}", config.optimized_part]

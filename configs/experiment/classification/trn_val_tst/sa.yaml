@@ -2,18 +2,19 @@
 
 disease: Parkinson        # Disease type. Options: [Parkinson, Schizophrenia]
 data_type: harmonized     # Data type. Options: [non_harmonized, harmonized]
-model_type: lightgbm      # Model type. Options: for SA: [xgboost, catboost, lightgbm], for PL: [tabnet, node]
+model_type: svm      # Model type. Options: for SA: [xgboost, catboost, lightgbm, logistic_regression, svm], for PL: [tabnet, node]
 outcome: "Status"         # Which column in `data.xlsx` contains class labels
 
 name: ${disease}_${data_type}_${model_type}
 
 seed: 42
 
-cv_is_split: False
-cv_n_splits: 5
-cv_n_repeats: 5
+cv_is_split: False  # Perform cross-validation?
+cv_n_splits: 5      # Number of splits in cross-validation
+cv_n_repeats: 5     # Number of repeats in cross-validation
 
 optimized_metric: "accuracy_weighted"   # Target metric in optimization process. Options: [accuracy_weighted, f1_weighted, auroc_weighted, ...]
+optimized_mean: ""                      # Optimizing mean metric value across all cross-validation splits. Options: ["", cv_mean]
 optimized_part: "val"                   # Which partition should be optimized? Options: [trn, val, tst]
 direction: "max"                        # Optimization metrics should be minimized or maximized? Options: [max, min]
 
@@ -33,8 +34,11 @@ base_dir: "${original_work_dir}/data/${disease}"
 work_dir: "${base_dir}/${data_type}/models/${name}"
 data_dir: "${base_dir}/${data_type}"
 
-is_shap: True         # SHAP values calculation. Options: [True, False]
-shap_explainer: Tree  # Explainer type for SHAP values. Options: for SA: [Tree, Kernel], for PL: [Deep, Kernel]
+# SHAP values
+is_shap: False                    # SHAP values calculation. Options: [True, False]
+is_shap_save: False               # Save SHAP values to file?
+shap_explainer: Tree              # Explainer type for SHAP values. Options: for SA: [Tree, Kernel], for PL: [Deep, Kernel]
+shap_bkgrd: tree_path_dependent   # Background for calculating SHAP values. Options: [trn, all, tree_path_dependent]. Last option works only for GBDT models
 
 # Plot params
 num_top_features: 5
@@ -110,3 +114,21 @@ model_lightgbm:
   metric: 'multi_logloss'
   max_epochs: ${max_epochs}
   patience: ${patience}
+
+logistic_regression:
+  penalty: "elasticnet"
+  l1_ratio: 0.5
+  C: 1.0
+  multi_class: "multinomial"
+  solver: "saga"
+  max_iter: 100
+  tol: 1e-4
+  verbose: 0
+
+svm:
+  C: 1.0
+  kernel: "rbf"
+  decision_function_shape: "ovr"
+  max_iter: -1
+  tol: 1e-2
+  verbose: 1
