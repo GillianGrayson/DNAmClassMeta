@@ -29,7 +29,7 @@ patience: 100     # How many validation epochs of not improving until training s
 in_dim: 1000
 out_dim: 2
 
-original_work_dir: ${hydra:runtime.cwd}
+original_work_dir: ${oc.env:PROJECT_ROOT}
 base_dir: "${original_work_dir}/data/${disease}"
 work_dir: "${base_dir}/${data_type}/models/${name}"
 data_dir: "${base_dir}/${data_type}"
